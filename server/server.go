@@ -97,14 +97,16 @@ type Server struct {
 
 // NewServer returns a server.
 func NewServer(options ...OptionFn) *Server {
+	//初始化默认参数
 	s := &Server{
-		Plugins:    &pluginContainer{},
+		Plugins:    &pluginContainer{}, // 默认插件实现
 		options:    make(map[string]interface{}),
 		activeConn: make(map[net.Conn]struct{}),
 		doneChan:   make(chan struct{}),
-		serviceMap: make(map[string]*service),
+		serviceMap: make(map[string]*service), // 存储注册的所有结构体
 	}
 
+	//给Server赋值配置
 	for _, op := range options {
 		op(s)
 	}

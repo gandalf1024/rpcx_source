@@ -46,8 +46,8 @@ type service struct {
 }
 
 func isExported(name string) bool {
-	rune, _ := utf8.DecodeRuneInString(name)
-	return unicode.IsUpper(rune)
+	rune, _ := utf8.DecodeRuneInString(name) //取结构体首字符
+	return unicode.IsUpper(rune)             // 判断字符是否是大写
 }
 
 func isExportedOrBuiltinType(t reflect.Type) bool {
@@ -69,12 +69,22 @@ func isExportedOrBuiltinType(t reflect.Type) bool {
 // no suitable methods. It also logs the error.
 // The client accesses each method using a string of the form "Type.Method",
 // where Type is the receiver's concrete type.
+//注册将在服务器上发布的方法集
+//满足以下条件的接收者值：
+//	-导出类型的导出方法
+//	-三个参数，第一个是context.Context，两个参数都导出类型
+//	-第三个参数是一个指针
+//	-一个错误类型的返回值
+//如果接收者不是导出类型或具有接收者类型，则返回错误
+//没有合适的方法。 它还记录错误。
+//客户端使用“ Type.Method”形式的字符串访问每个方法，
+//其中Type是接收者的具体类型。
 func (s *Server) Register(rcvr interface{}, metadata string) error {
-	sname, err := s.register(rcvr, "", false)
+	sname, err := s.register(rcvr, "", false) // 注册服务
 	if err != nil {
 		return err
 	}
-	return s.Plugins.DoRegister(sname, rcvr, metadata)
+	return s.Plugins.DoRegister(sname, rcvr, metadata) // 注册插件
 }
 
 // RegisterName is like Register but uses the provided name for the type
@@ -108,17 +118,19 @@ func (s *Server) RegisterFunctionName(servicePath string, name string, fn interf
 }
 
 func (s *Server) register(rcvr interface{}, name string, useName bool) (string, error) {
+	// 读写锁
+	// 同步注册
 	s.serviceMapMu.Lock()
 	defer s.serviceMapMu.Unlock()
 
 	service := new(service)
-	service.typ = reflect.TypeOf(rcvr)
-	service.rcvr = reflect.ValueOf(rcvr)
+	service.typ = reflect.TypeOf(rcvr)                    // 获取注册体类型
+	service.rcvr = reflect.ValueOf(rcvr)                  // 获取注册体值
 	sname := reflect.Indirect(service.rcvr).Type().Name() // Type
-	if useName {
+	if useName {                                          // 别名
 		sname = name
 	}
-	if sname == "" {
+	if sname == "" { // 必须有一个名字
 		errorStr := "rpcx.Register: no service name for type " + service.typ.String()
 		log.Error(errorStr)
 		return sname, errors.New(errorStr)
@@ -239,14 +251,14 @@ func suitableMethods(typ reflect.Type, reportErr bool) map[string]*methodType {
 			continue
 		}
 		// Method needs four ins: receiver, context.Context, *args, *reply.
-		if mtype.NumIn() != 4 {
+		if mtype.NumIn() != 4 { // 参数数量判断
 			if reportErr {
 				log.Debug("method ", mname, " has wrong number of ins:", mtype.NumIn())
 			}
 			continue
 		}
 		// First arg must be context.Context
-		ctxType := mtype.In(1)
+		ctxType := mtype.In(1) // 判断第一个参数是否是context.Context
 		if !ctxType.Implements(typeOfContext) {
 			if reportErr {
 				log.Debug("method ", mname, " must use context.Context as the first parameter")
@@ -271,14 +283,14 @@ func suitableMethods(typ reflect.Type, reportErr bool) map[string]*methodType {
 			continue
 		}
 		// Reply type must be exported.
-		if !isExportedOrBuiltinType(replyType) {
+		if !isExportedOrBuiltinType(replyType) { //判断导出类型
 			if reportErr {
 				log.Info("method", mname, " reply type not exported:", replyType)
 			}
 			continue
 		}
 		// Method needs one out.
-		if mtype.NumOut() != 1 {
+		if mtype.NumOut() != 1 { // 输出类型参数判断
 			if reportErr {
 				log.Info("method", mname, " has wrong number of outs:", mtype.NumOut())
 			}
@@ -291,7 +303,7 @@ func suitableMethods(typ reflect.Type, reportErr bool) map[string]*methodType {
 			}
 			continue
 		}
-		methods[mname] = &methodType{method: method, ArgType: argType, ReplyType: replyType}
+		methods[mname] = &methodType{method: method, ArgType: argType, ReplyType: replyType} //封装，并放入map
 
 		argsReplyPools.Init(argType)
 		argsReplyPools.Init(replyType)
