@@ -24,6 +24,7 @@ func (s *Server) startGateway(network string, ln net.Listener) net.Listener {
 		return ln
 	}
 
+	//多路复用,在同一端口上提供不同的服务
 	m := cmux.New(ln)
 
 	rpcxLn := m.Match(rpcxPrefixByteMatcher())

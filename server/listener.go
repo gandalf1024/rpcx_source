@@ -26,11 +26,11 @@ type MakeListener func(s *Server, address string) (ln net.Listener, err error)
 // block can be nil if the caller wishes to skip encryption in kcp.
 // tlsConfig can be nil iff we are not using network "quic".
 func (s *Server) makeListener(network, address string) (ln net.Listener, err error) {
-	ml := makeListeners[network]
+	ml := makeListeners[network] // 选择网络类型
 	if ml == nil {
 		return nil, fmt.Errorf("can not make listener for %s", network)
 	}
-	return ml(s, address)
+	return ml(s, address) //tcpMakeListener 返回的匿名方法
 }
 
 func tcpMakeListener(network string) func(s *Server, address string) (ln net.Listener, err error) {
