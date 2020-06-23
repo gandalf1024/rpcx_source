@@ -267,6 +267,7 @@ func suitableMethods(typ reflect.Type, reportErr bool) map[string]*methodType {
 		}
 
 		// Second arg need not be a pointer.
+		// 不必是指针
 		argType := mtype.In(2)
 		if !isExportedOrBuiltinType(argType) {
 			if reportErr {
@@ -275,6 +276,7 @@ func suitableMethods(typ reflect.Type, reportErr bool) map[string]*methodType {
 			continue
 		}
 		// Third arg must be a pointer.
+		// 必须是指针
 		replyType := mtype.In(3)
 		if replyType.Kind() != reflect.Ptr {
 			if reportErr {
@@ -290,6 +292,7 @@ func suitableMethods(typ reflect.Type, reportErr bool) map[string]*methodType {
 			continue
 		}
 		// Method needs one out.
+		// 输出类型只能是error一个参数
 		if mtype.NumOut() != 1 { // 输出类型参数判断
 			if reportErr {
 				log.Info("method", mname, " has wrong number of outs:", mtype.NumOut())
@@ -297,6 +300,7 @@ func suitableMethods(typ reflect.Type, reportErr bool) map[string]*methodType {
 			continue
 		}
 		// The return type of the method must be error.
+		// 返回类型必须是error
 		if returnType := mtype.Out(0); returnType != typeOfError {
 			if reportErr {
 				log.Info("method", mname, " returns ", returnType.String(), " not error")

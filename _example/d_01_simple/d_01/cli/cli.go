@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
-	"rpcx_source/_example/d_01/model"
+	"rpcx_source/_example/d_01_simple/d_01/model"
 	"rpcx_source/client"
 )
 

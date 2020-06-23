@@ -126,7 +126,7 @@ type Option struct {
 	// If it is empty, clients will ignore group.
 	Group string
 
-	// Retries retries to send
+	// Retries retries to send 重试次数
 	Retries int
 
 	// TLSConfig for tcp and quic

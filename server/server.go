@@ -177,7 +177,7 @@ func (s *Server) startShutdownListener() {
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, syscall.SIGTERM)
 		si := <-c
-		if si.String() == "terminated" {
+		if si.String() == "terminated" { //如果是命令行终止
 			if nil != s.onShutdown && len(s.onShutdown) > 0 {
 				for _, sd := range s.onShutdown {
 					sd(s)
@@ -192,7 +192,7 @@ func (s *Server) startShutdownListener() {
 func (s *Server) Serve(network, address string) (err error) {
 	s.startShutdownListener() //异步监听阻断，执行关闭操作
 	var ln net.Listener
-	ln, err = s.makeListener(network, address)
+	ln, err = s.makeListener(network, address) //获取监听
 	if err != nil {
 		return
 	}
@@ -203,6 +203,7 @@ func (s *Server) Serve(network, address string) (err error) {
 	}
 
 	// try to start gateway
+	// 启动多路复用
 	ln = s.startGateway(network, ln)
 
 	return s.serveListener(ln)
@@ -238,12 +239,12 @@ func (s *Server) serveListener(ln net.Listener) error {
 		conn, e := ln.Accept()
 		if e != nil {
 			select {
-			case <-s.getDoneChan():
+			case <-s.getDoneChan(): //已经调用过（shutdown）相关方法
 				return ErrServerClosed
 			default:
 			}
 
-			if ne, ok := e.(net.Error); ok && ne.Temporary() {
+			if ne, ok := e.(net.Error); ok && ne.Temporary() { //重连
 				if tempDelay == 0 {
 					tempDelay = 5 * time.Millisecond
 				} else {
@@ -259,20 +260,33 @@ func (s *Server) serveListener(ln net.Listener) error {
 				continue
 			}
 
-			if strings.Contains(e.Error(), "listener closed") {
+			if strings.Contains(e.Error(), "listener closed") { //连接已关闭
 				return ErrServerClosed
 			}
 			return e
 		}
 		tempDelay = 0
 
+		//SetLinger设置连接仍然关闭的行为
+		//关闭后该连接上仍有等待发送或确认的数据。
+		//有等待发送或确认的数据。
+		//
+		//如果sec <0（默认值），则操作系统完成发送
+		//后台的数据。
+		//
+		//如果sec == 0，则操作系统会丢弃所有未发送或
+		//未确认的数据。
+		//
+		//如果sec> 0，则与sec <0一样在后台发送数据。
+		//几秒钟后，某些操作系统已耗尽
+		//未发送的数据可能会被丢弃。
 		if tc, ok := conn.(*net.TCPConn); ok {
-			tc.SetKeepAlive(true)
-			tc.SetKeepAlivePeriod(3 * time.Minute)
-			tc.SetLinger(10)
+			tc.SetKeepAlive(true)                  //探测，重连
+			tc.SetKeepAlivePeriod(3 * time.Minute) //探测，重连 时间间隔
+			tc.SetLinger(10)                       //数据接收规则
 		}
 
-		conn, ok := s.Plugins.DoPostConnAccept(conn)
+		conn, ok := s.Plugins.DoPostConnAccept(conn) //执行插件
 		if !ok {
 			closeChannel(s, conn)
 			continue
@@ -302,7 +316,7 @@ func (s *Server) serveByHTTP(ln net.Listener, rpcPath string) {
 
 func (s *Server) serveConn(conn net.Conn) {
 	defer func() {
-		if err := recover(); err != nil {
+		if err := recover(); err != nil { // 有错误log堆栈信息
 			const size = 64 << 10
 			buf := make([]byte, size)
 			ss := runtime.Stack(buf, false)
@@ -313,32 +327,32 @@ func (s *Server) serveConn(conn net.Conn) {
 			log.Errorf("serving %s panic error: %s, stack:\n %s", conn.RemoteAddr(), err, buf)
 		}
 		s.mu.Lock()
-		delete(s.activeConn, conn)
+		delete(s.activeConn, conn) //删除连接
 		s.mu.Unlock()
-		conn.Close()
+		conn.Close() // 关闭网络连接
 
-		s.Plugins.DoPostConnClose(conn)
+		s.Plugins.DoPostConnClose(conn) //插件关闭连接操作
 	}()
 
-	if isShutdown(s) {
+	if isShutdown(s) { //判断服务是否关闭
 		closeChannel(s, conn)
 		return
 	}
 
 	if tlsConn, ok := conn.(*tls.Conn); ok {
-		if d := s.readTimeout; d != 0 {
+		if d := s.readTimeout; d != 0 { // 设置读过期时间
 			conn.SetReadDeadline(time.Now().Add(d))
 		}
-		if d := s.writeTimeout; d != 0 {
+		if d := s.writeTimeout; d != 0 { // 设置写过期时间
 			conn.SetWriteDeadline(time.Now().Add(d))
 		}
-		if err := tlsConn.Handshake(); err != nil {
+		if err := tlsConn.Handshake(); err != nil { //初次读写自动调用
 			log.Errorf("rpcx: TLS handshake error from %s: %v", conn.RemoteAddr(), err)
 			return
 		}
 	}
 
-	r := bufio.NewReaderSize(conn, ReaderBuffsize)
+	r := bufio.NewReaderSize(conn, ReaderBuffsize) //ReaderBuffsize 缓冲区初始化大小
 
 	for {
 		if isShutdown(s) {
@@ -348,12 +362,12 @@ func (s *Server) serveConn(conn net.Conn) {
 
 		t0 := time.Now()
 		if s.readTimeout != 0 {
-			conn.SetReadDeadline(t0.Add(s.readTimeout))
+			conn.SetReadDeadline(t0.Add(s.readTimeout)) //设置过期时间点
 		}
 
 		ctx := share.WithValue(context.Background(), RemoteConnContextKey, conn)
 
-		req, err := s.readRequest(ctx, r)
+		req, err := s.readRequest(ctx, r) //封装请求
 		if err != nil {
 			if err == io.EOF {
 				log.Infof("client has closed this connection: %s", conn.RemoteAddr().String())
@@ -376,7 +390,7 @@ func (s *Server) serveConn(conn net.Conn) {
 			closeConn = err != nil
 		}
 
-		if err != nil {
+		if err != nil { //验证错误
 			if !req.IsOneway() {
 				res := req.Clone()
 				res.SetMessageType(protocol.Response)
@@ -405,7 +419,7 @@ func (s *Server) serveConn(conn net.Conn) {
 			atomic.AddInt32(&s.handlerMsgNum, 1)
 			defer atomic.AddInt32(&s.handlerMsgNum, -1)
 
-			if req.IsHeartbeat() {
+			if req.IsHeartbeat() { //心跳消息
 				req.SetMessageType(protocol.Response)
 				data := req.EncodeSlicePointer()
 				conn.Write(*data)
