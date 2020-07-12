@@ -537,7 +537,7 @@ func (client *Client) send(ctx context.Context, call *Call) {
 	}
 
 	data := req.EncodeSlicePointer()
-	_, err := client.Conn.Write(*data)
+	_, err := client.Conn.Write(*data) //发送数据
 	protocol.PutData(data)
 
 	if err != nil {

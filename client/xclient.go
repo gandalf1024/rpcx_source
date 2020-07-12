@@ -425,7 +425,7 @@ func (c *xClient) Call(ctx context.Context, serviceMethod string, args interface
 	}
 
 	var err error
-	k, client, err := c.selectClient(ctx, c.servicePath, serviceMethod, args)
+	k, client, err := c.selectClient(ctx, c.servicePath, serviceMethod, args) //连接
 	if err != nil {
 		if c.failMode == Failfast {
 			return err
@@ -440,7 +440,7 @@ func (c *xClient) Call(ctx context.Context, serviceMethod string, args interface
 			retries--
 
 			if client != nil {
-				err = c.wrapCall(ctx, client, serviceMethod, args, reply)
+				err = c.wrapCall(ctx, client, serviceMethod, args, reply) //调用
 				if err == nil {
 					return nil
 				}
@@ -663,9 +663,9 @@ func (c *xClient) wrapCall(ctx context.Context, client RPCClient, serviceMethod 
 	}
 
 	ctx = share.NewContext(ctx)
-	c.Plugins.DoPreCall(ctx, c.servicePath, serviceMethod, args)
+	c.Plugins.DoPreCall(ctx, c.servicePath, serviceMethod, args) //前置插件
 	err := client.Call(ctx, c.servicePath, serviceMethod, args, reply)
-	c.Plugins.DoPostCall(ctx, c.servicePath, serviceMethod, args, reply, err)
+	c.Plugins.DoPostCall(ctx, c.servicePath, serviceMethod, args, reply, err) //后置插件
 
 	return err
 }
